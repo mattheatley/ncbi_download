@@ -10,13 +10,8 @@ parser = argparse.ArgumentParser(
                                 )
 
 taxons = [
-          'bacteria'
-         ,'fungi'
-         ,'protozoa'
-         ,'archaea'
-         ,'viral'
-         ,'plant'
-         ,'invertebrate'
+          'bacteria', 'fungi', 'protozoa', 'archaea', 'viral'
+         ,'plant',    'invertebrate'
          ]
 
 databases = [
