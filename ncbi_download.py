@@ -17,9 +17,9 @@ databases = [
              'genbank', 'refseq'
             ]
 
-parser.add_argument('-p', metavar='</path/to/working_directory>', type=str, default='~/NCBI',                                        help='specify path to working directory' )
-parser.add_argument('-t', metavar='<taxon>',                      type=str, default='all',    nargs='+', choices=['all',*taxons],    help='specify taxon to download'         )
-parser.add_argument('-d', metavar='<database>',                   type=str, default='all',    nargs='+', choices=['all',*databases], help='specify database source'           )
+parser.add_argument('-p', metavar='</path/to/directory>', type=str, default='~/NCBI',                                        help='specify path to working directory')
+parser.add_argument('-t', metavar='<taxon>',              type=str, default='all',    nargs='+', choices=['all',*taxons],    help='specify taxon to download')
+parser.add_argument('-d', metavar='<database>',           type=str, default='all',    nargs='+', choices=['all',*databases], help='specify database source')
 
 modes = parser.add_mutually_exclusive_group(required=True) # run modes
 modes.add_argument( '-download', action='store_true', help='download files'     )
@@ -110,7 +110,10 @@ for SOURCE in databases:
 
         id_dir, sh_dir, oe_dir, downloaded_dir = batch_dirs
 
-        [ os.makedirs(path, exist_ok=True) for path in batch_dirs ]
+        [
+         os.makedirs(path, exist_ok=True)
+         for path in batch_dirs
+        ]
 
         id_file = f'{id_dir}/{TAXON}.id'
 
@@ -118,7 +121,11 @@ for SOURCE in databases:
         if reviewing:
             
             print('REVIEWING...')
-            GEN_FILES = [ contents.name for contents in os.scandir(GEN_DIR) ]
+            
+            GEN_FILES = [
+                         contents.name
+                         for contents in os.scandir(GEN_DIR)
+                        ]
 
         for line in open(MANIFEST_FILE, 'r').readlines():
 
