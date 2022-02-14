@@ -10,20 +10,20 @@ parser = argparse.ArgumentParser(
                                 )
 
 taxons = [
-          'bacteria', 'fungi', 'protozoa', 'archaea', 'viral'
-         ,'plant',    'invertebrate'
+          'bacteria', 'fungi', 'protozoa', 'archaea', 'viral', 'plant', 'invertebrate'
          ]
 
 databases = [
-             'genbank'
-            ,'refseq'
+             'genbank', 'refseq'
             ]
 
-parser.add_argument('-p',        metavar='</path/to/working_directory>', type=str, default='~/NCBI',                                        help='specify path to working directory')
-parser.add_argument('-t',        metavar='<taxon>',                      type=str, default='all',    nargs='+', choices=['all',*taxons],    help='specify taxon to download')
-parser.add_argument('-d',        metavar='<database>',                   type=str, default='all',    nargs='+', choices=['all',*databases], help='specify database source')
-parser.add_argument('-download', action='store_true',                                                                                       help='download files')
-parser.add_argument('-review',   action='store_true',                                                                                       help='review file status')
+parser.add_argument('-p', metavar='</path/to/working_directory>', type=str, default='~/NCBI',                                        help='specify path to working directory' )
+parser.add_argument('-t', metavar='<taxon>',                      type=str, default='all',    nargs='+', choices=['all',*taxons],    help='specify taxon to download'         )
+parser.add_argument('-d', metavar='<database>',                   type=str, default='all',    nargs='+', choices=['all',*databases], help='specify database source'           )
+
+modes = parser.add_mutually_exclusive_group(required=True) # run modes
+modes.add_argument( '-download', action='store_true', help='download files'     )
+modes.add_argument( '-review',   action='store_true', help='review file status' )
 
 PATH, SELECTED, DATABASE, downloading, reviewing = vars(parser.parse_args()).values() # define user inputs
 
@@ -65,17 +65,29 @@ for SOURCE in databases:
             subprocess.run(f'wget -O {ASSEMBLY_FILE} {ASSEMBLY_URL}', shell=True) # linux
             #subprocess.run(f'cURL -o {ASSEMBLY_FILE} {ASSEMBLY_URL}', shell=True) # unix
         
+            target_columns = [
+                'taxid', 'assembly_level', 'ftp_path'
+                ]
+
             with open(MANIFEST_FILE, 'w') as MANIFEST:
 
-                for line in open(ASSEMBLY_FILE, 'r').readlines():
-                    
+                for i, line in enumerate(open(ASSEMBLY_FILE, 'r').readlines()):
+
+                    if i == 1: 
+                        
+                        assembly_header = line.strip('# ').split('\t')
+                        header_idx = [ assembly_header.index(name) for name in target_columns ]
+
                     if line.startswith('#'): continue
-                    
+
                     line = line.strip().split('\t')
 
-                    taxid, = line[5:6]
-                    assembly_level, = line[11:12]
-                    ftp_path, = line[19:20]
+                    assembly_info = [
+                                     line[idx]
+                                     for idx in header_idx
+                                    ]
+
+                    taxid, assembly_level, ftp_path = assembly_info
 
                     if assembly_level in ['Chromosome', 'Complete Genome']:
 
@@ -168,4 +180,3 @@ for SOURCE in databases:
                     if os.path.basename(script).startswith('buddy'): continue
                     else: print(sub_id, script, sep='\t', file=id_output, flush=True) # record task job id & shell script
             print('\tALL TASKS SUBMITTED\n')
-
