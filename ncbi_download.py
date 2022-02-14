@@ -19,16 +19,16 @@ databases = [
             ,'refseq'
             ]
 
-parser.add_argument('-p',        metavar='</path/to/working_directory>', type=str, default='~/NCBI',                              help='specify path to working directory')
-parser.add_argument('-t',        metavar='<taxon>',                      type=str, default='all',     choices=['all',*taxons],    help='specify taxon to download')
-parser.add_argument('-d',        metavar='<database>',                   type=str, default='all',     choices=['all',*databases], help='specify database source')
-parser.add_argument('-download', action='store_true',                                                                             help='download files')
-parser.add_argument('-review',   action='store_true',                                                                             help='review file status')
+parser.add_argument('-p',        metavar='</path/to/working_directory>', type=str, default='~/NCBI',                                        help='specify path to working directory')
+parser.add_argument('-t',        metavar='<taxon>',                      type=str, default='all',    nargs='+', choices=['all',*taxons],    help='specify taxon to download')
+parser.add_argument('-d',        metavar='<database>',                   type=str, default='all',    nargs='+', choices=['all',*databases], help='specify database source')
+parser.add_argument('-download', action='store_true',                                                                                       help='download files')
+parser.add_argument('-review',   action='store_true',                                                                                       help='review file status')
 
 PATH, SELECTED, DATABASE, downloading, reviewing = vars(parser.parse_args()).values() # define user inputs
 
-taxons    = taxons    if SELECTED == 'all' else [SELECTED]
-databases = databases if DATABASE == 'all' else [DATABASE]
+taxons    = taxons    if 'all' in SELECTED else SELECTED
+databases = databases if 'all' in DATABASE else DATABASE
 
 WRK_DIR = f'/{PATH.strip("/")}'
 
