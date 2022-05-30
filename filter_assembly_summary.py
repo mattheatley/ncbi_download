@@ -6,7 +6,7 @@ NCBI_dir = '/Users/matt/Desktop/NCBI'
 os.makedirs(NCBI_dir, exist_ok=True)
 
 current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-current_date = '2022-05-25'
+
 current_subdir = f'{NCBI_dir}/{current_date}'
 os.makedirs(current_subdir, exist_ok=True)
 
