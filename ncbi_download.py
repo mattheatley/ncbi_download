@@ -1,4 +1,4 @@
-import os, sys, subprocess, argparse
+import os, sys, subprocess, argparse, datetime
 from re import sub
 from core import SBATCH, ezSub, CAPTURE
 
@@ -17,98 +17,159 @@ databases = [
              'genbank', 'refseq'
             ]
 
-parser.add_argument('-p', metavar='</path/to/directory>', type=str, default='~/NCBI',                                        help='specify path to working directory')
-parser.add_argument('-t', metavar='<taxon>',              type=str, default='all',    nargs='+', choices=['all',*taxons],    help='specify taxon to download')
-parser.add_argument('-d', metavar='<database>',           type=str, default='all',    nargs='+', choices=['all',*databases], help='specify database source')
+current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+parser.add_argument('-p', metavar='</path/to/directory>',   type=str, default=f'~/NCBI/{current_date}',                               help='specify path to working directory')
+parser.add_argument('-t', metavar='<taxon>',                type=str, default='all',    nargs='+', choices=['all',*taxons, 'custom'], help='specify taxon to download')
+parser.add_argument('-d', metavar='<database>',             type=str, default='all',    nargs='+', choices=['all',*databases],        help='specify database source')
+parser.add_argument('-q', metavar='<quality>',              type=str, default='good',              choices=['good','best'],           help='select only Complete/Chromosome (good) or Representative (best) genomes')
+parser.add_argument('-c', metavar='</path/to/custom_list>', type=str, required=False,                                                 help='specify path to custom list')
 
 modes = parser.add_mutually_exclusive_group(required=True) # run modes
 modes.add_argument( '-download', action='store_true', help='download files'     )
 modes.add_argument( '-review',   action='store_true', help='review file status' )
 
-PATH, SELECTED, DATABASE, downloading, reviewing = vars(parser.parse_args()).values() # define user inputs
+PATH, SELECTED_TAXONS, SELECTED_DATABASES, QUALITY, CUSTOM_LIST, downloading, reviewing = vars(parser.parse_args()).values() # define user inputs
 
-taxons    = taxons    if 'all' in SELECTED else SELECTED
-databases = databases if 'all' in DATABASE else DATABASE
+if 'custom' in SELECTED_TAXONS:
+    if not CUSTOM_LIST: 
+        print("ERROR!")
+        sys.exit(0)
+else:
+    if CUSTOM_LIST:
+        
+        custom_accessions = [ ]
+
+        for line in open(CUSTOM_LIST,'r').readlines():
+        
+            if line.startswith('#'): continue
+        
+            accession, *_ = info = line.strip().split('\t')
+
+            *_, accession = accession.split(':')
+
+            custom_accessions.append(accession)
+
+taxons    =                                                taxons    if 'all' in SELECTED_TAXONS else SELECTED_TAXONS
+databases = ['custom'] if 'custom' in SELECTED_TAXONS else databases if 'all' in SELECTED_DATABASES else SELECTED_DATABASES
 
 WRK_DIR = f'/{PATH.strip("/")}'
-
+# LOCAL TESTING
+WRK_DIR = f'/Users/matt/Desktop{WRK_DIR}'
+# LOCAL TESTING
 os.makedirs(WRK_DIR, exist_ok=True)
 
 for SOURCE in databases:
 
     # format path as per rsync_from_ncbi.pl
 
-    RSYNC_PATH = 'https://ftp.ncbi.nlm.nih.gov/genomes/'
-    SUFFIX='_genomic.fna.gz'
+    RSYNC_PATH = 'https://ftp.ncbi.nlm.nih.gov/genomes'
+    ASSEMBLY_SUFFIX='_genomic.fna.gz'
 
-    BASE_URL = f'{RSYNC_PATH}{SOURCE}'
+    BASE_URL = f'{RSYNC_PATH}/{SOURCE}'
 
-    SOURCE_DIR = f'{WRK_DIR}/{SOURCE}'
-
+    SOURCE_DIR = f'{WRK_DIR}/{SOURCE}/{QUALITY}'
     os.makedirs(SOURCE_DIR, exist_ok=True)
+
 
     for TAXON in taxons:
 
         TAXON_DIR = f'{SOURCE_DIR}/{TAXON}'
         GEN_DIR = f'{TAXON_DIR}/all'
-
-        ASSEMBLY_URL = f'{BASE_URL}/{TAXON}/assembly_summary.txt'
-
-        ASSEMBLY_FILE = f'{TAXON_DIR}/assembly_summary.txt'
-        MANIFEST_FILE = f'{TAXON_DIR}/manifest.txt'
-                
         [ os.makedirs(subdir, exist_ok=True) for subdir in [TAXON_DIR, GEN_DIR] ]
+
+        MANIFEST_FILE = f'{TAXON_DIR}/manifest.txt'
+        SELECTED_FILE = f'{TAXON_DIR}/selected.txt'
+        ASSEMBLY_FILE = CUSTOM_LIST if TAXON == 'custom' else f'{TAXON_DIR}/assembly_summary.txt'
 
         if downloading:
 
-            # download assembly file
-            subprocess.run(f'wget -O {ASSEMBLY_FILE} {ASSEMBLY_URL}', shell=True) # linux
-            #subprocess.run(f'cURL -o {ASSEMBLY_FILE} {ASSEMBLY_URL}', shell=True) # unix
-        
-            target_columns = [
-                'taxid', 'assembly_level', 'ftp_path'
-                ]
+            # specify assembly summary to download
+            if TAXON != 'custom':
 
-            with open(MANIFEST_FILE, 'w') as MANIFEST:
+                ASSEMBLY_URL = f'{BASE_URL}/{TAXON}/assembly_summary.txt'
+
+                # download assembly file
+                #subprocess.run(f'wget -O {ASSEMBLY_FILE} {ASSEMBLY_URL}', shell=True) # linux
+                subprocess.run(f'cURL -o {ASSEMBLY_FILE} {ASSEMBLY_URL}', shell=True) # unix
+            
+            with open(MANIFEST_FILE, 'w') as MANIFEST, open(SELECTED_FILE, 'w') as SELECTED:
 
                 for i, line in enumerate(open(ASSEMBLY_FILE, 'r').readlines()):
 
                     if i == 1: 
                         
-                        assembly_header = line.strip('# ').split('\t')
-                        header_idx = [ assembly_header.index(name) for name in target_columns ]
+                        line = line.strip('\n')
+                        print(line, file=SELECTED)
 
+                        # extract relevant column headers
+                        assembly_header = line.strip('# ').split('\t')
+
+                        header_idx = [ 
+                            assembly_header.index(name)
+                            for name in [
+                                 'assembly_accession'
+                                ,'taxid'
+                                ,'organism_name'
+                                ,'assembly_level'
+                                ,'refseq_category'
+                                ,'ftp_path'
+                                ]
+                            ]
+
+                    # ignore other comments
                     if line.startswith('#'): continue
 
-                    line = line.strip().split('\t')
+                    # extract relevant line info
+                    info = line.strip().split('\t')
 
                     assembly_info = [
-                                     line[idx]
+                                     info[idx]
                                      for idx in header_idx
                                     ]
 
-                    taxid, assembly_level, ftp_path = assembly_info
+                    assembly_accession, taxid, organism_name, assembly_level, refseq_category, ftp_path = assembly_info
 
-                    if assembly_level in ['Chromosome', 'Complete Genome']:
 
-                        # path recorded in assembly file
-                        if ftp_path != 'na':
 
-                            # remove server path
-                            ftp_path = ftp_path.replace(f'{RSYNC_PATH}','')
+                    # specify filter criteria; any listed assembly (custom) or only best quality (taxon) 
+                    assembly_level_criteria  = ('') if TAXON == 'custom' or QUALITY == 'best' else ('chromosome', 'complete genome')
+                    refseq_category_criteria = ('') if TAXON == 'custom' or QUALITY == 'good' else ('reference', 'representative')
 
-                            *_, basename = os.path.split(ftp_path)
-                            ftp_file = f'{basename}{SUFFIX}'
+                    if assembly_level.lower().startswith(assembly_level_criteria):
 
-                            manifest_path = f'{ftp_path}/{ftp_file}'
+                        if refseq_category.lower().startswith(refseq_category_criteria):
 
-                            print(manifest_path, file=MANIFEST)
+                            # ignore assembly if also part of custom set
+                            if TAXON != 'custom' and CUSTOM_LIST:
+
+                                if assembly_accession in custom_accessions: 
+
+                                    print(f'skipping {organism_name}; {assembly_accession} (included in custom list)')
+                                    continue
+
+
+                            # path recorded in assembly file
+                            if ftp_path != 'na':
+
+                                print(*info, file=SELECTED)
+
+                                # remove server from path
+                                ftp_path = ftp_path.replace(f'{RSYNC_PATH}/','')
+
+                                *_, basename = os.path.split(ftp_path)
+                                ftp_file = f'{basename}{ASSEMBLY_SUFFIX}'
+
+                                manifest_path = f'{ftp_path}/{ftp_file}'
+
+                                print(manifest_path, file=MANIFEST)
+
+
 
         scripts = []
 
-        batch_dirs = [ f'{TAXON_DIR}/{description}' for description in ['id','sh','oe','completed'] ]
+        batch_dirs = [ f'{TAXON_DIR}/{description}' for description in ['id','sh','oe'] ]
 
-        id_dir, sh_dir, oe_dir, downloaded_dir = batch_dirs
+        id_dir, sh_dir, oe_dir = batch_dirs
 
         [
          os.makedirs(path, exist_ok=True)
@@ -133,7 +194,8 @@ for SOURCE in databases:
 
             *_, TARGET_FILE = os.path.split(URL)
             
-            SAMPLE = TARGET_FILE.replace(SUFFIX,'')
+            SAMPLE = TARGET_FILE.replace(ASSEMBLY_SUFFIX,'')
+            DESCRIPTION = f'{TAXON}_{SAMPLE}'
 
             if reviewing:
 
@@ -141,7 +203,7 @@ for SOURCE in databases:
 
                     print(f'{TARGET_FILE} missing!')
 
-                    err_file = f'{oe_dir}/{SAMPLE}.err'   
+                    err_file = f'{oe_dir}/{DESCRIPTION}.err'   
 
                     status = CAPTURE(f'cat {err_file}')
 
@@ -150,26 +212,26 @@ for SOURCE in databases:
             # write slurm file
             if downloading:
 
-                sh_file = f'{sh_dir}/{SAMPLE}.sh'
+                sh_file = f'{sh_dir}/{DESCRIPTION}.sh'
 
                 with open(sh_file, 'w') as sh:
 
                     # specify hpcc directives (slurm)
                     hpcc_directives = SBATCH(
-                        job_id=SAMPLE
+                        job_id=DESCRIPTION
                         ,partition='defq'
                         ,nodes=1
                         ,ntasks=1
-                        ,memory='1gb'
-                        ,walltime='01:00:00'
+                        ,memory='5gb'
+                        ,walltime='02:00:00'
                         ,out_err=oe_dir
                         )
                     
                     sh.write(
                         hpcc_directives
                     +'echo STARTED `date`\n'
-                    +f'wget --spider {RSYNC_PATH}{URL}\n'
-                    +f'wget -O {GEN_DIR}/{TARGET_FILE} {RSYNC_PATH}{URL}\n'
+                    +f'wget --spider {RSYNC_PATH}/{URL}\n'
+                    +f'wget -O {GEN_DIR}/{TARGET_FILE} {RSYNC_PATH}/{URL}\n'
                     #+f'mv {sh_file} {downloaded_dir}/\n'
                     +'echo FINISHED `date`\n'
                     )
