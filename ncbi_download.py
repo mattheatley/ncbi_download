@@ -18,7 +18,7 @@ databases = [
             ]
 
 current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-parser.add_argument('-p', metavar='</path/to/directory>',   type=str, default=f'~/NCBI/{current_date}',                               help='specify path to working directory')
+parser.add_argument('-p', metavar='</path/to/directory>',   type=str, default=f'x.DOWNLOADS/NCBI/{current_date}',                     help='specify path to working directory')
 parser.add_argument('-t', metavar='<taxon>',                type=str, default='all',    nargs='+', choices=['all',*taxons, 'custom'], help='specify taxon to download')
 parser.add_argument('-d', metavar='<database>',             type=str, default='all',    nargs='+', choices=['all',*databases],        help='specify database source')
 parser.add_argument('-q', metavar='<quality>',              type=str, default='good',              choices=['good','best'],           help='select only Complete/Chromosome (good) or Representative (best) genomes')
@@ -53,9 +53,6 @@ taxons    =                                                taxons    if 'all' in
 databases = ['custom'] if 'custom' in SELECTED_TAXONS else databases if 'all' in SELECTED_DATABASES else SELECTED_DATABASES
 
 WRK_DIR = f'/{PATH.strip("/")}'
-# LOCAL TESTING
-WRK_DIR = f'/Users/matt/Desktop{WRK_DIR}'
-# LOCAL TESTING
 os.makedirs(WRK_DIR, exist_ok=True)
 
 for SOURCE in databases:
@@ -89,8 +86,8 @@ for SOURCE in databases:
                 ASSEMBLY_URL = f'{BASE_URL}/{TAXON}/assembly_summary.txt'
 
                 # download assembly file
-                #subprocess.run(f'wget -O {ASSEMBLY_FILE} {ASSEMBLY_URL}', shell=True) # linux
-                subprocess.run(f'cURL -o {ASSEMBLY_FILE} {ASSEMBLY_URL}', shell=True) # unix
+                subprocess.run(f'wget -O {ASSEMBLY_FILE} {ASSEMBLY_URL}', shell=True) # linux
+                #subprocess.run(f'cURL -o {ASSEMBLY_FILE} {ASSEMBLY_URL}', shell=True) # unix
             
             with open(MANIFEST_FILE, 'w') as MANIFEST, open(SELECTED_FILE, 'w') as SELECTED:
 
@@ -151,7 +148,7 @@ for SOURCE in databases:
                             # path recorded in assembly file
                             if ftp_path != 'na':
 
-                                print(*info, file=SELECTED)
+                                print(*info, sep='\t', file=SELECTED)
 
                                 # remove server from path
                                 ftp_path = ftp_path.replace(f'{RSYNC_PATH}/','')
